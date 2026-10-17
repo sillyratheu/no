@@ -13,7 +13,21 @@ LOCAL_VNC_PORT = 5901
 
 @st.cache_resource
 def setup_vnc_and_bore():
-    # 1. Setup VNC Directory and Password
+    # 1. Install system dependencies including dbus-x11
+    install_cmd = """
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update && apt-get install -y \
+        dbus-x11 \
+        xfce4 \
+        xfce4-goodies \
+        tightvncserver \
+        procps \
+        net-tools \
+        curl
+    """
+    subprocess.run(install_cmd, shell=True)
+
+    # 2. Setup VNC Directory and Password
     vnc_dir = os.path.expanduser("~/.vnc")
     os.makedirs(vnc_dir, exist_ok=True)
     
@@ -22,24 +36,24 @@ def setup_vnc_and_bore():
     if os.path.exists(passwd_file):
         os.chmod(passwd_file, 0o600)
 
-    # 2. Configure XFCE Startup
+    # 3. Configure XFCE Startup with dbus-launch to fix the settings server error
     xstartup_file = os.path.join(vnc_dir, "xstartup")
     with open(xstartup_file, "w") as f:
         f.write("#!/bin/sh\n")
-        f.write("xrdb $HOME/.Xresources\n")
-        f.write("startxfce4 &\n")
+        f.write("unset DBUS_SESSION_BUS_ADDRESS\n")
+        f.write("exec dbus-launch --exit-with-session startxfce4 &\n")
     os.chmod(xstartup_file, 0o755)
 
-    # 3. Kill existing VNC sessions and start fresh
+    # 4. Kill existing VNC sessions and start fresh
     subprocess.run("vncserver -kill :1", shell=True, capture_output=True)
     subprocess.run("vncserver :1 -geometry 1280x720 -depth 16", shell=True)
 
-    # 4. Download Bore binary if not present
+    # 5. Download Bore binary if not present
     if not os.path.exists("./bore"):
         subprocess.run("curl -sL https://github.com/ekzhang/bore/releases/download/v0.5.0/bore-v0.5.0-x86_64-unknown-linux-musl.tar.gz | tar -xz", shell=True)
         os.chmod("./bore", 0o755)
 
-    # 5. Launch Bore tunnel in background and capture allocated port
+    # 6. Launch Bore tunnel in background and capture allocated port
     log_file = "bore.log"
     subprocess.Popen(f"./bore local {LOCAL_VNC_PORT} --to bore.pub > {log_file} 2>&1", shell=True)
 
@@ -50,7 +64,6 @@ def setup_vnc_and_bore():
         if os.path.exists(log_file):
             with open(log_file, "r") as f:
                 content = f.read()
-                # Match line like: listening at bore.pub:38421
                 match = re.search(r"listening at (bore\.pub:\d+)", content)
                 if match:
                     public_address = match.group(1)
@@ -59,7 +72,7 @@ def setup_vnc_and_bore():
     return public_address
 
 # Run Setup
-with st.spinner("Starting VNC Server & Tunneling via bore.pub..."):
+with st.spinner("Setting up D-Bus, XFCE desktop & Bore tunnel..."):
     bore_addr = setup_vnc_and_bore()
 
 if bore_addr:
@@ -67,9 +80,9 @@ if bore_addr:
     
     st.subheader("🔑 VNC Connection Details")
     st.code(f"Address: {bore_addr}\nPassword: {VNC_PASS}", language="text")
-    st.info(f"👉 In your VNC Viewer app, enter **`{bore_addr}`** in the address bar and use password **`{VNC_PASS}`**.")
+    st.info(f"👉 In your VNC Viewer app, enter **`{bore_addr}`** and use password **`{VNC_PASS}`**.")
 else:
-    st.warning("⚠️ VNC is running, but bore.pub is taking longer to assign a port. Please refresh the page in 5 seconds.")
+    st.warning("⚠️ VNC is running, but bore.pub is assigning a port. Please refresh the page in 5 seconds.")
 
 st.markdown("---")
 st.write("🟢 Server status: **Active 24/7 via NotRa Uptime Dashboard**")
