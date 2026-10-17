@@ -1,0 +1,7 @@
+xfce4
+xfce4-goodies
+tightvncserver
+procps
+net-tools
+curl
+midori
