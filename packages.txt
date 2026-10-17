@@ -4,4 +4,4 @@ tightvncserver
 procps
 net-tools
 curl
-midori
+netsurf-gtk
