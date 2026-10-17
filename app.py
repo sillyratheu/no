@@ -36,12 +36,16 @@ def setup_vnc_and_bore():
     if os.path.exists(passwd_file):
         os.chmod(passwd_file, 0o600)
 
-    # 3. Configure XFCE Startup with dbus-launch to fix the settings server error
+    # 3. Configure XFCE Startup to explicitly launch window manager and panel
     xstartup_file = os.path.join(vnc_dir, "xstartup")
     with open(xstartup_file, "w") as f:
         f.write("#!/bin/sh\n")
         f.write("unset DBUS_SESSION_BUS_ADDRESS\n")
-        f.write("exec dbus-launch --exit-with-session startxfce4 &\n")
+        f.write("xrdb $HOME/.Xresources\n")
+        f.write("xfsettingsd &\n")
+        f.write("xfwm4 --replace &\n")
+        f.write("xfce4-panel &\n")
+        f.write("exec startxfce4\n")
     os.chmod(xstartup_file, 0o755)
 
     # 4. Kill existing VNC sessions and start fresh
@@ -72,7 +76,7 @@ def setup_vnc_and_bore():
     return public_address
 
 # Run Setup
-with st.spinner("Setting up D-Bus, XFCE desktop & Bore tunnel..."):
+with st.spinner("Configuring XFCE desktop components & Bore tunnel..."):
     bore_addr = setup_vnc_and_bore()
 
 if bore_addr:
