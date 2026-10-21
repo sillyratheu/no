@@ -14,7 +14,7 @@ st.write("Bangla ebong English-er jonno toiri tomar nijsho custom Transformer mo
 REPO_ID = "Vidclip/Shahajjo"
 HF_TOKEN = os.environ.get("HF_TOKEN") or st.secrets.get("HF_TOKEN", None)
 
-# Model architecture class
+# Fixed Model Architecture Class
 class ShahajjoMassiveTransformer(nn.Module):
     def __init__(self, vocab_size, d_model=512, nhead=8, num_layers=6, pad_idx=0):
         super().__init__()
@@ -25,8 +25,8 @@ class ShahajjoMassiveTransformer(nn.Module):
 
     def forward(self, x):
         emb = self.embedding(x)
-        src_key_padding_mask = (x == self.embedding.padding_idx)
-        out = self.transformer(emb, src_key_padding_mask=src_key_padding_mask)
+        # Direct transformer forward pass without buggy padding mask tensor conversion
+        out = self.transformer(emb)
         return self.fc_out(out)
 
 # Cache resource to load model & tokenizer only once
@@ -88,7 +88,7 @@ if prompt := st.chat_input("Sahajjo AI ke kichu jiggesh koro..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Generate model response using safe token boundary checking
+    # Generate model response
     with st.chat_message("assistant"):
         with st.spinner("Chinta korche..."):
             try:
@@ -98,7 +98,6 @@ if prompt := st.chat_input("Sahajjo AI ke kichu jiggesh koro..."):
                 input_ids = []
                 for t in tokens:
                     idx = stoi.get(t, stoi.get("<unk>", 1))
-                    # Prevent index out of range error
                     if not isinstance(idx, int) or idx < 0 or idx >= max_vocab_size:
                         idx = 1
                     input_ids.append(idx)
@@ -109,7 +108,7 @@ if prompt := st.chat_input("Sahajjo AI ke kichu jiggesh koro..."):
                 generated_ids = list(input_ids)
                 
                 with torch.no_grad():
-                    for _ in range(25):  # Max 25 tokens generate korbe
+                    for _ in range(25):  # Max 25 tokens
                         input_tensor = torch.tensor([generated_ids], dtype=torch.long)
                         outputs = model(input_tensor)
                         next_token_logits = outputs[0, -1, :]
