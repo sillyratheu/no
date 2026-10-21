@@ -29,7 +29,7 @@ class ShahajjoMassiveTransformer(nn.Module):
         out = self.transformer(emb, src_key_padding_mask=src_key_padding_mask)
         return self.fc_out(out)
 
-# Cache resource to load model & tokenizer only once (Saves RAM & time)
+# Cache resource to load model & tokenizer only once
 @st.cache_resource
 def load_model_and_tokenizer():
     try:
@@ -84,17 +84,25 @@ for message in st.session_state.messages:
 
 # User Chat Input
 if prompt := st.chat_input("Sahajjo AI ke kichu jiggesh koro..."):
-    # Add user message to state and display
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Generate model response using Autoregressive Loop
+    # Generate model response using safe token boundary checking
     with st.chat_message("assistant"):
         with st.spinner("Chinta korche..."):
             try:
                 tokens = prompt.strip().split()
-                input_ids = [stoi.get(t, stoi.get("<unk>", 1)) for t in tokens]
+                max_vocab_size = model.embedding.num_embeddings
+                
+                input_ids = []
+                for t in tokens:
+                    idx = stoi.get(t, stoi.get("<unk>", 1))
+                    # Prevent index out of range error
+                    if not isinstance(idx, int) or idx < 0 or idx >= max_vocab_size:
+                        idx = 1
+                    input_ids.append(idx)
+                
                 if not input_ids:
                     input_ids = [stoi.get("<sos>", 2)]
                     
@@ -107,6 +115,9 @@ if prompt := st.chat_input("Sahajjo AI ke kichu jiggesh koro..."):
                         next_token_logits = outputs[0, -1, :]
                         next_token_id = torch.argmax(next_token_logits).item()
                         
+                        if next_token_id < 0 or next_token_id >= max_vocab_size:
+                            next_token_id = 1
+                            
                         if next_token_id == stoi.get("<eos>", 3):
                             break
                         generated_ids.append(next_token_id)
