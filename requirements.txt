@@ -1,3 +1,0 @@
-streamlit
-torch
-higgingface_hub
