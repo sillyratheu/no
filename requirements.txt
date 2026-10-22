@@ -1,6 +1,5 @@
-fastapi
-uvicorn
+streamlit
 torch
-numpy
 huggingface_hub
+numpy
 pydantic
