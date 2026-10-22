@@ -11,7 +11,7 @@ st.write("Ramim Rahman er tiri kora custom Bangla LLM model.")
 
 REPO_ID = "Vidclip/Shahajjo"
 
-# Streamlit Secrets theke token nibe (GitHub-e kono token thakbe na)
+# Secrets theke token nibe
 try:
     HF_TOKEN = st.secrets["HF_TOKEN"]
 except Exception:
@@ -20,7 +20,6 @@ except Exception:
 @st.cache_resource
 def load_shahajjo_model():
     try:
-        # Pass token if available
         kwarg = {"token": HF_TOKEN} if HF_TOKEN else {}
         
         model_path = hf_hub_download(repo_id=REPO_ID, filename="model.pth", **kwarg)
@@ -58,12 +57,12 @@ def load_shahajjo_model():
         model = ShahajjoMassiveTransformer(vocab_size=vocab_size, d_model=d_model, nhead=nhead, num_layers=num_layers)
         model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
         model.eval()
-        return model, stoi, itos
+        return model, stoi, itos, vocab_size
     except Exception as e:
         st.error(f"Error loading model: {e}")
-        return None, None, None
+        return None, None, None, 0
 
-model, stoi, itos = load_shahajjo_model()
+model, stoi, itos, vocab_size = load_shahajjo_model()
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -80,17 +79,31 @@ if prompt := st.chat_input("Apnake ki sahajjo korte pari?"):
     with st.chat_message("assistant"):
         if model is not None and stoi is not None:
             try:
-                tokens = prompt.split()
-                input_ids = [stoi.get(t, stoi.get("<unk>", 1)) for t in tokens]
+                tokens = prompt.strip().split()
+                unk_id = stoi.get("<unk>", 1)
+                
+                # Safe Token ID conversion (Prevents out-of-range index error)
+                input_ids = []
+                for t in tokens:
+                    token_id = stoi.get(t, unk_id)
+                    # Clamp index within valid vocab range
+                    if token_id >= vocab_size:
+                        token_id = unk_id
+                    input_ids.append(token_id)
+                
                 if not input_ids:
                     input_ids = [stoi.get("<sos>", 2)]
                 
                 input_tensor = torch.tensor([input_ids], dtype=torch.long)
+                
                 with torch.no_grad():
                     outputs = model(input_tensor)
                     predicted_ids = torch.argmax(outputs, dim=-1).squeeze(0).tolist()
                 
-                response_words = [itos.get(str(idx), "") for idx in predicted_ids]
+                if isinstance(predicted_ids, int):
+                    predicted_ids = [predicted_ids]
+                
+                response_words = [itos.get(str(idx), itos.get(idx, "")) for idx in predicted_ids]
                 response_text = " ".join([w for w in response_words if w not in ["<pad>", "<sos>", "<eos>"]])
                 
                 if not response_text.strip():
