@@ -11,7 +11,7 @@ st.write("Ramim Rahman er tiri kora custom Bangla LLM model.")
 
 REPO_ID = "Vidclip/Shahajjo"
 
-# Secrets theke token nibe
+# Secrets theke token nibe safely
 try:
     HF_TOKEN = st.secrets["HF_TOKEN"]
 except Exception:
@@ -82,11 +82,10 @@ if prompt := st.chat_input("Apnake ki sahajjo korte pari?"):
                 tokens = prompt.strip().split()
                 unk_id = stoi.get("<unk>", 1)
                 
-                # Safe Token ID conversion (Prevents out-of-range index error)
+                # Safe Token ID conversion with bounds checking
                 input_ids = []
                 for t in tokens:
                     token_id = stoi.get(t, unk_id)
-                    # Clamp index within valid vocab range
                     if token_id >= vocab_size:
                         token_id = unk_id
                     input_ids.append(token_id)
@@ -94,16 +93,25 @@ if prompt := st.chat_input("Apnake ki sahajjo korte pari?"):
                 if not input_ids:
                     input_ids = [stoi.get("<sos>", 2)]
                 
-                input_tensor = torch.tensor([input_ids], dtype=torch.long)
-                
+                # Proper Autoregressive Generation Loop to prevent repetition
+                model.eval()
                 with torch.no_grad():
-                    outputs = model(input_tensor)
-                    predicted_ids = torch.argmax(outputs, dim=-1).squeeze(0).tolist()
+                    generated_ids = input_ids.copy()
+                    for _ in range(15):  # Max 15 tokens generated step-by-step
+                        curr_tensor = torch.tensor([generated_ids], dtype=torch.long)
+                        outputs = model(curr_tensor)
+                        next_token_logits = outputs[0, -1, :]
+                        next_token = torch.argmax(next_token_logits).item()
+                        
+                        # Clamp generated token if out of range
+                        if next_token >= vocab_size:
+                            next_token = unk_id
+                            
+                        if next_token == stoi.get("<eos>", 3):
+                            break
+                        generated_ids.append(next_token)
                 
-                if isinstance(predicted_ids, int):
-                    predicted_ids = [predicted_ids]
-                
-                response_words = [itos.get(str(idx), itos.get(idx, "")) for idx in predicted_ids]
+                response_words = [itos.get(str(idx), itos.get(idx, "")) for idx in generated_ids[len(input_ids):]]
                 response_text = " ".join([w for w in response_words if w not in ["<pad>", "<sos>", "<eos>"]])
                 
                 if not response_text.strip():
