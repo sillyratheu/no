@@ -12,14 +12,13 @@ REPO_ID = "vidclip/Shahajjo"
 st.set_page_config(page_title="Shahajjo LLM Backend", layout="centered")
 
 # ==========================================
-# Sothik Transformer Architecture Class
+# Transformer Architecture Class
 # ==========================================
 class ShahajjoBrain(nn.Module):
     def __init__(self, vocab_size=40000, embed_dim=512, num_layers=6, nhead=8):
         super(ShahajjoBrain, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         
-        # Error theke paowa Transformer Encoder structure
         encoder_layer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=nhead, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         
@@ -34,13 +33,9 @@ class ShahajjoBrain(nn.Module):
 @st.cache_resource
 def load_all_from_hf():
     try:
-        # 1. Automatic Hugging Face repo theke Tokenizer download & load
         tokenizer = AutoTokenizer.from_pretrained(REPO_ID, token=HF_TOKEN)
-        
-        # 2. Repo theke model.pth automatic download
         model_file_path = hf_hub_download(repo_id=REPO_ID, filename="model.pth", token=HF_TOKEN)
         
-        # 3. Model weights PyTorch-e load kora
         vocab_size = len(tokenizer) if len(tokenizer) > 0 else 40000
         model = ShahajjoBrain(vocab_size=vocab_size, embed_dim=512, num_layers=6)
         
@@ -61,12 +56,24 @@ text_input = query_params.get("text", None)
 if text_input:
     if model and tokenizer:
         try:
-            inputs = tokenizer(text_input, return_tensors="pt")
+            input_ids = tokenizer(text_input, return_tensors="pt")["input_ids"]
+            max_new_tokens = 30  # Koto gulo new word/token generate korbe
             
             with torch.no_grad():
-                outputs = model(inputs["input_ids"])
-                next_token_ids = torch.argmax(outputs, dim=-1)
-                decoded = tokenizer.decode(next_token_ids[0], skip_special_tokens=True)
+                for _ in range(max_new_tokens):
+                    outputs = model(input_ids)
+                    # Shesh token-er logits niye next token predict kora
+                    next_token_logits = outputs[:, -1, :]
+                    next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+                    
+                    # Input-er sathe notun token jure dewa
+                    input_ids = torch.cat([input_ids, next_token_id], dim=1)
+                    
+                    # Jodi EOS (End of Sequence) pay, tahole theme jabe
+                    if tokenizer.eos_token_id and next_token_id.item() == tokenizer.eos_token_id:
+                        break
+            
+            decoded = tokenizer.decode(input_ids[0], skip_special_tokens=True)
             
             result = {
                 "status": "success",
@@ -80,13 +87,12 @@ if text_input:
     else:
         result = {"status": "error", "response": f"Failed to load: {error_msg}"}
     
-    # Render-er BeautifulSoup / API Gateway-er jonno JSON output
     st.code(json.dumps(result), language="json")
     st.stop()
 
 # Streamlit normal web page UI
 st.title("🇧🇩 Shahajjo LLM Backend")
 if model and tokenizer:
-    st.success("Transformer Model & Tokenizer loaded successfully from Hugging Face!")
+    st.success("Transformer Model & Tokenizer loaded successfully!")
 else:
-    st.error(f"Error loading model from Hugging Face: {error_msg}")
+    st.error(f"Error loading model: {error_msg}")
