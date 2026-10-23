@@ -27,7 +27,6 @@ def load_tokenizer():
 
 tokenizer = load_tokenizer()
 
-# Render API Gateway theke asha query params check kora
 query_params = st.query_params
 text_input = query_params.get("text", None)
 
@@ -48,8 +47,8 @@ if text_input:
     else:
         result = {"status": "error", "response": "Tokenizer files are still loading."}
     
-    # st.text use korle HTML page-er vitor plain text hisebe JSON chole asbe
-    st.text(json.dumps(result))
+    # Clean HTML div tag jeta BeautifulSoup diye shohoje dhora jabe
+    st.markdown(f'<div id="real-json-output">{json.dumps(result)}</div>', unsafe_allow_html=True)
     st.stop()
 
 # Normal Streamlit UI
