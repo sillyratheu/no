@@ -3,6 +3,8 @@ import torch
 import json
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+# Streamlit-er Secrets theke secure vabe Hugging Face Token nawa
+HF_TOKEN = st.secrets["HF_TOKEN"]
 REPO_ID = "vidclip/Shahajjo"
 
 st.set_page_config(page_title="Shahajjo LLM Backend", layout="centered")
@@ -24,7 +26,7 @@ def load_llm():
 
 tokenizer, model = load_llm()
 
-# Streamlit link-e query parameter dhora (jemon: https://shahajjo.streamlit.app/?text=hi)
+# Render ba URL theke asha query parameter dhora (jemon: ?text=hi)
 query_params = st.query_params
 text_input = query_params.get("text", None)
 
