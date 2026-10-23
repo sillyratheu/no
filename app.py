@@ -12,18 +12,22 @@ REPO_ID = "vidclip/Shahajjo"
 st.set_page_config(page_title="Shahajjo LLM Backend", layout="centered")
 
 # ==========================================
-# Colab-e train kora Model Architecture Class
+# Sothik Transformer Architecture Class
 # ==========================================
 class ShahajjoBrain(nn.Module):
-    def __init__(self, vocab_size=30000, embed_dim=256, hidden_dim=512):
+    def __init__(self, vocab_size=40000, embed_dim=512, num_layers=6, nhead=8):
         super(ShahajjoBrain, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
-        self.lstm = nn.LSTM(embed_dim, hidden_dim, batch_first=True)
-        self.fc = nn.Linear(hidden_dim, vocab_size)
+        
+        # Error theke paowa Transformer Encoder structure
+        encoder_layer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=nhead, batch_first=True)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        
+        self.fc = nn.Linear(embed_dim, vocab_size)
 
     def forward(self, x):
         embedded = self.embedding(x)
-        out, _ = self.lstm(embedded)
+        out = self.transformer_encoder(embedded)
         logits = self.fc(out)
         return logits
 
@@ -37,8 +41,8 @@ def load_all_from_hf():
         model_file_path = hf_hub_download(repo_id=REPO_ID, filename="model.pth", token=HF_TOKEN)
         
         # 3. Model weights PyTorch-e load kora
-        vocab_size = len(tokenizer)
-        model = ShahajjoBrain(vocab_size=vocab_size)
+        vocab_size = len(tokenizer) if len(tokenizer) > 0 else 40000
+        model = ShahajjoBrain(vocab_size=vocab_size, embed_dim=512, num_layers=6)
         
         state_dict = torch.load(model_file_path, map_location=torch.device('cpu'))
         model.load_state_dict(state_dict)
@@ -83,6 +87,6 @@ if text_input:
 # Streamlit normal web page UI
 st.title("🇧🇩 Shahajjo LLM Backend")
 if model and tokenizer:
-    st.success("All model files and Tokenizer loaded successfully from Hugging Face!")
+    st.success("Transformer Model & Tokenizer loaded successfully from Hugging Face!")
 else:
     st.error(f"Error loading model from Hugging Face: {error_msg}")
