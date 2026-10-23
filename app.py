@@ -48,8 +48,8 @@ if text_input:
     else:
         result = {"status": "error", "response": "Tokenizer files are still loading."}
     
-    # Clean HTML div tag wrapping so Render can parse it easily
-    st.markdown(f'<div id="api-json-response">{json.dumps(result)}</div>', unsafe_allow_html=True)
+    # st.text use korle HTML page-er vitor plain text hisebe JSON chole asbe
+    st.text(json.dumps(result))
     st.stop()
 
 # Normal Streamlit UI
