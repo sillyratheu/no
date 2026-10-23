@@ -3,28 +3,12 @@ import torch
 import json
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Streamlit-er Secrets theke secure vabe Hugging Face Token nawa
+# Streamlit secrets theke token nawa
 HF_TOKEN = st.secrets["HF_TOKEN"]
 REPO_ID = "vidclip/Shahajjo"
 
 st.set_page_config(page_title="Shahajjo LLM Backend", layout="centered")
 
-@st.cache_resource
-def load_llm():
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(REPO_ID, token=HF_TOKEN)
-        model = AutoModelForCausalLM.from_pretrained(
-            REPO_ID, 
-            token=HF_TOKEN, 
-            torch_dtype=torch.float32, 
-            low_cpu_mem_usage=True
-        )
-        return tokenizer, model
-    except Exception as e:
-        print(f"Model load error: {e}")
-        return None, None
-
-tokenizer, model = load_llm()
 @st.cache_resource
 def load_llm():
     try:
@@ -41,15 +25,7 @@ def load_llm():
 
 tokenizer, model, error_msg = load_llm()
 
-# ... query parameter er vitor:
-if text_input:
-    if model and tokenizer:
-        # generation logic...
-    else:
-        result = {"status": "error", "response": f"Failed to load: {error_msg}"}
-
-
-# Render ba URL theke asha query parameter dhora (jemon: ?text=hi)
+# Query parameter dhora (jemon: ?text=hi)
 query_params = st.query_params
 text_input = query_params.get("text", None)
 
@@ -78,15 +54,15 @@ if text_input:
         except Exception as e:
             result = {"status": "error", "response": f"Generation error: {str(e)}"}
     else:
-        result = {"status": "error", "response": "Model or Tokenizer failed to load."}
+        result = {"status": "error", "response": f"Failed to load: {error_msg}"}
     
-    # Render-er BeautifulSoup/gateway er jonno pure JSON output <code` block-e
+    # Render-er BeautifulSoup/gateway er jonno pure JSON output
     st.code(json.dumps(result), language="json")
     st.stop()
 
-# Normal Streamlit Web UI (jodi keu direct browser-e link open kore)
+# Normal Streamlit Web UI
 st.title("🇧🇩 Shahajjo LLM Backend")
 if model and tokenizer:
     st.success("LLM Model & PyTorch loaded successfully in Streamlit!")
 else:
-    st.warning("Loading LLM model from Hugging Face...")
+    st.warning(f"Loading LLM model failed: {error_msg}")
