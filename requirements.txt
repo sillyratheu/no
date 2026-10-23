@@ -1,6 +1,8 @@
 streamlit
 torch
-torchvision 
-transformers
+safetensors
+tokenizers
 huggingface_hub
+requests
+beautifulsoup4
 accelerate
