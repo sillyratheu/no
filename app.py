@@ -1,31 +1,56 @@
 import streamlit as st
 import torch
+import torch.nn as nn
 import json
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from huggingface_hub import hf_hub_download
+from transformers import AutoTokenizer
 
 # Streamlit secrets theke token nawa
-HF_TOKEN = st.secrets["HF_TOKEN"]
+HF_TOKEN = st.secrets.get("HF_TOKEN", "")
 REPO_ID = "vidclip/Shahajjo"
 
 st.set_page_config(page_title="Shahajjo LLM Backend", layout="centered")
 
+# ==========================================
+# Colab-e train kora Model Architecture Class
+# ==========================================
+class ShahajjoBrain(nn.Module):
+    def __init__(self, vocab_size=30000, embed_dim=256, hidden_dim=512):
+        super(ShahajjoBrain, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+        self.lstm = nn.LSTM(embed_dim, hidden_dim, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, vocab_size)
+
+    def forward(self, x):
+        embedded = self.embedding(x)
+        out, _ = self.lstm(embedded)
+        logits = self.fc(out)
+        return logits
+
 @st.cache_resource
-def load_llm():
+def load_all_from_hf():
     try:
+        # 1. Automatic Hugging Face repo theke Tokenizer download & load
         tokenizer = AutoTokenizer.from_pretrained(REPO_ID, token=HF_TOKEN)
-        model = AutoModelForCausalLM.from_pretrained(
-            REPO_ID, 
-            token=HF_TOKEN, 
-            torch_dtype=torch.float32, 
-            low_cpu_mem_usage=True
-        )
+        
+        # 2. Repo theke model.pth automatic download
+        model_file_path = hf_hub_download(repo_id=REPO_ID, filename="model.pth", token=HF_TOKEN)
+        
+        # 3. Model weights PyTorch-e load kora
+        vocab_size = len(tokenizer)
+        model = ShahajjoBrain(vocab_size=vocab_size)
+        
+        state_dict = torch.load(model_file_path, map_location=torch.device('cpu'))
+        model.load_state_dict(state_dict)
+        model.eval()
+        
         return tokenizer, model, None
     except Exception as e:
         return None, None, str(e)
 
-tokenizer, model, error_msg = load_llm()
+tokenizer, model, error_msg = load_all_from_hf()
 
-# Query parameter dhora (jemon: ?text=hi)
+# Render / Web Request dhora (?text=hi)
 query_params = st.query_params
 text_input = query_params.get("text", None)
 
@@ -35,14 +60,9 @@ if text_input:
             inputs = tokenizer(text_input, return_tensors="pt")
             
             with torch.no_grad():
-                outputs = model.generate(
-                    inputs["input_ids"],
-                    max_new_tokens=100,
-                    do_sample=True,
-                    temperature=0.7
-                )
-            
-            decoded = tokenizer.decode(outputs[0], skip_special_tokens=True)
+                outputs = model(inputs["input_ids"])
+                next_token_ids = torch.argmax(outputs, dim=-1)
+                decoded = tokenizer.decode(next_token_ids[0], skip_special_tokens=True)
             
             result = {
                 "status": "success",
@@ -56,13 +76,13 @@ if text_input:
     else:
         result = {"status": "error", "response": f"Failed to load: {error_msg}"}
     
-    # Render-er BeautifulSoup/gateway er jonno pure JSON output
+    # Render-er BeautifulSoup / API Gateway-er jonno JSON output
     st.code(json.dumps(result), language="json")
     st.stop()
 
-# Normal Streamlit Web UI
+# Streamlit normal web page UI
 st.title("🇧🇩 Shahajjo LLM Backend")
 if model and tokenizer:
-    st.success("LLM Model & PyTorch loaded successfully in Streamlit!")
+    st.success("All model files and Tokenizer loaded successfully from Hugging Face!")
 else:
-    st.warning(f"Loading LLM model failed: {error_msg}")
+    st.error(f"Error loading model from Hugging Face: {error_msg}")
