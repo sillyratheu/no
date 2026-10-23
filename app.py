@@ -33,9 +33,13 @@ class ShahajjoBrain(nn.Module):
 @st.cache_resource
 def load_all_from_hf():
     try:
+        # 1. Automatic Hugging Face repo theke Tokenizer download & load
         tokenizer = AutoTokenizer.from_pretrained(REPO_ID, token=HF_TOKEN)
+        
+        # 2. Repo theke model.pth automatic download
         model_file_path = hf_hub_download(repo_id=REPO_ID, filename="model.pth", token=HF_TOKEN)
         
+        # 3. Model weights PyTorch-e load kora
         vocab_size = len(tokenizer) if len(tokenizer) > 0 else 40000
         model = ShahajjoBrain(vocab_size=vocab_size, embed_dim=512, num_layers=6)
         
@@ -57,19 +61,22 @@ if text_input:
     if model and tokenizer:
         try:
             input_ids = tokenizer(text_input, return_tensors="pt")["input_ids"]
-            max_new_tokens = 30  # Koto gulo new word/token generate korbe
+            max_new_tokens = 40  # Koto gulo word generate korbe
+            temperature = 0.8    # Creativity ba randomness baranor jonno
             
             with torch.no_grad():
                 for _ in range(max_new_tokens):
                     outputs = model(input_ids)
-                    # Shesh token-er logits niye next token predict kora
-                    next_token_logits = outputs[:, -1, :]
-                    next_token_id = torch.argmax(next_token_logits, dim=-1, keepdim=True)
+                    next_token_logits = outputs[:, -1, :] / temperature
+                    
+                    # Argmax-er bodole torch.multinomial use korle loop hobe na
+                    probs = torch.softmax(next_token_logits, dim=-1)
+                    next_token_id = torch.multinomial(probs, num_samples=1)
                     
                     # Input-er sathe notun token jure dewa
                     input_ids = torch.cat([input_ids, next_token_id], dim=1)
                     
-                    # Jodi EOS (End of Sequence) pay, tahole theme jabe
+                    # Jodi EOS token pay, theme jabe
                     if tokenizer.eos_token_id and next_token_id.item() == tokenizer.eos_token_id:
                         break
             
@@ -87,12 +94,13 @@ if text_input:
     else:
         result = {"status": "error", "response": f"Failed to load: {error_msg}"}
     
+    # Render-er BeautifulSoup / API Gateway-er jonno JSON output
     st.code(json.dumps(result), language="json")
     st.stop()
 
 # Streamlit normal web page UI
 st.title("🇧🇩 Shahajjo LLM Backend")
 if model and tokenizer:
-    st.success("Transformer Model & Tokenizer loaded successfully!")
+    st.success("Transformer Model & Tokenizer loaded successfully from Hugging Face!")
 else:
-    st.error(f"Error loading model: {error_msg}")
+    st.error(f"Error loading model from Hugging Face: {error_msg}")
