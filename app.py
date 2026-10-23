@@ -25,6 +25,29 @@ def load_llm():
         return None, None
 
 tokenizer, model = load_llm()
+@st.cache_resource
+def load_llm():
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(REPO_ID, token=HF_TOKEN)
+        model = AutoModelForCausalLM.from_pretrained(
+            REPO_ID, 
+            token=HF_TOKEN, 
+            torch_dtype=torch.float32, 
+            low_cpu_mem_usage=True
+        )
+        return tokenizer, model, None
+    except Exception as e:
+        return None, None, str(e)
+
+tokenizer, model, error_msg = load_llm()
+
+# ... query parameter er vitor:
+if text_input:
+    if model and tokenizer:
+        # generation logic...
+    else:
+        result = {"status": "error", "response": f"Failed to load: {error_msg}"}
+
 
 # Render ba URL theke asha query parameter dhora (jemon: ?text=hi)
 query_params = st.query_params
