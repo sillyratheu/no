@@ -13,7 +13,7 @@ REPO_ID = "vidclip/Shahajjo"
 st.set_page_config(page_title="Shahajjo LLM Backend", layout="centered")
 
 # ==========================================
-# ShahajjoBrain Architecture (Notun Training Script onujayi)
+# ShahajjoBrain Architecture
 # ==========================================
 class ShahajjoBrain(nn.Module):
     def __init__(self, vocab_size, embed_dim=256, num_layers=4, nhead=4):
@@ -76,8 +76,11 @@ if text_input:
                 input_ids = [0]
             
             input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
-            max_new_tokens = 40  # Koto gulo token generate korbe
-            temperature = 0.8    # Creativity ba randomness
+            max_new_tokens = 30  
+            temperature = 0.7    
+            
+            pad_id = tokenizer.token_to_id("<pad>")
+            eos_id = tokenizer.token_to_id("</s>")
             
             with torch.no_grad():
                 for _ in range(max_new_tokens):
@@ -87,11 +90,16 @@ if text_input:
                     probs = torch.softmax(next_token_logits, dim=-1)
                     next_token_id = torch.multinomial(probs, num_samples=1)
                     
+                    # Jodi pad ba eos token ase, tahole loop theme jabe
+                    token_val = next_token_id.item()
+                    if (pad_id is not None and token_val == pad_id) or (eos_id is not None and token_val == eos_id):
+                        break
+                        
                     input_tensor = torch.cat([input_tensor, next_token_id], dim=1)
             
-            # Output token ids ke decode kore text banano
+            # Output token ids ke decode kore clean kora
             output_ids = input_tensor[0].tolist()
-            decoded = tokenizer.decode(output_ids)
+            decoded = tokenizer.decode(output_ids).strip()
             
             result = {
                 "status": "success",
