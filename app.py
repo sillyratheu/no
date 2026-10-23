@@ -5,10 +5,8 @@ from tokenizers import Tokenizer
 
 st.set_page_config(page_title="Shahajjo AI Backend", layout="centered")
 
-# Hugging Face Repository details
 REPO_ID = "vidclip/Shahajjo"
 
-# Model files automatic download kora jodi local-e na thake
 @st.cache_resource
 def load_model_and_tokenizer():
     files = ["model.safetensors", "config.json", "tokenizer.json", "tokenizer_config.json"]
@@ -17,7 +15,7 @@ def load_model_and_tokenizer():
             try:
                 hf_hub_download(repo_id=REPO_ID, filename=file, local_dir=".")
             except Exception as e:
-                print(f"Download error for {file}: {e}")
+                print(f"Download error: {e}")
                 
     tokenizer = None
     if os.path.exists("tokenizer.json"):
@@ -30,36 +28,40 @@ def load_model_and_tokenizer():
 
 tokenizer = load_model_and_tokenizer()
 
-# Jodi Render gateway theke query parameter 'text' ashe, tahole shudhu JSON output dibe
+# Safe query params check for Streamlit
 query_params = st.query_params
-if "text" in query_params:
-    text_input = query_params["text"]
-    
+text_input = query_params.get("text", None)
+
+if text_input:
     if tokenizer is not None:
-        encoded = tokenizer.encode(text_input)
-        token_ids = encoded.ids
-        decoded_response = tokenizer.decode(token_ids)
-        
-        st.json({
-            "status": "success",
-            "response": decoded_response,
-            "reply": decoded_response,
-            "message": decoded_response,
-            "text": decoded_response
-        })
+        try:
+            encoded = tokenizer.encode(text_input)
+            token_ids = encoded.ids
+            decoded_response = tokenizer.decode(token_ids)
+            
+            st.json({
+                "status": "success",
+                "response": decoded_response,
+                "reply": decoded_response,
+                "message": decoded_response,
+                "text": decoded_response
+            })
+        except Exception as e:
+            st.json({
+                "status": "error",
+                "response": f"Tokenizer error: {str(e)}"
+            })
     else:
         st.json({
             "status": "error",
-            "response": "Tokenizer not loaded on Streamlit server."
+            "response": "Tokenizer files are still loading on Streamlit server."
         })
-    st.stop() # Normal UI load howa bondho kore dibe API request er somoy
+    st.stop()
 
-# Streamlit App er Normal UI (Jokhon keu browser theke direct visit korbe)
+# Normal UI (Jokhon keu direct browser-e visit korbe)
 st.title("🇧🇩 Shahajjo AI Backend Server")
-st.write("This Streamlit app runs 24/7 and acts as the heavy processing brain for Render API.")
-st.info("Render API Endpoint link-ti use kore apnar app ba frontend theke kotha bolte parben.")
-
+st.write("This Streamlit app runs 24/7 as the backend brain for Render API.")
 if tokenizer:
-    st.success("Tokenizer & Model files loaded successfully!")
+    st.success("Tokenizer loaded successfully!")
 else:
-    st.warning("Model files are downloading or missing.")
+    st.warning("Loading tokenizer files from Hugging Face...")
