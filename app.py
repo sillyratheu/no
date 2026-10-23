@@ -10,15 +10,13 @@ REPO_ID = "vidclip/Shahajjo"
 
 @st.cache_resource
 def load_tokenizer():
-    # Proyojoniyo file gulo token chara download korar jonno list
     files = ["config.json", "tokenizer.json", "tokenizer_config.json"]
     for file in files:
         if not os.path.exists(file):
             try:
-                # Public repo hole token chara-i direct download hobe
                 hf_hub_download(repo_id=REPO_ID, filename=file, local_dir=".")
             except Exception as e:
-                print(f"Download error for {file}: {e}")
+                print(f"Download error: {e}")
                 
     if os.path.exists("tokenizer.json"):
         try:
@@ -50,14 +48,14 @@ if text_input:
     else:
         result = {"status": "error", "response": "Tokenizer files are still loading."}
     
-    # Render Gateway-er jonno JSON output format
-    st.markdown(f"```json\n{json.dumps(result)}\n```")
+    # Clean HTML div tag wrapping so Render can parse it easily
+    st.markdown(f'<div id="api-json-response">{json.dumps(result)}</div>', unsafe_allow_html=True)
     st.stop()
 
-# Normal Streamlit UI (Jokhon keu direct browser theke visit korbe)
+# Normal Streamlit UI
 st.title("🇧🇩 Shahajjo AI Backend Server")
 st.write("24/7 Processing Brain for Render API Gateway")
 if tokenizer:
-    st.success("Tokenizer loaded successfully without token!")
+    st.success("Tokenizer loaded successfully!")
 else:
-    st.warning("Loading tokenizer files from Hugging Face...")
+    st.warning("Loading tokenizer files...")
