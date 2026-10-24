@@ -7,6 +7,9 @@ from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
 from transformers import PreTrainedTokenizerFast
 
+# ---------------------------------------------------------
+# Page Configuration
+# ---------------------------------------------------------
 st.set_page_config(
     page_title="Shahajjo Heavy LLM Chat",
     page_icon="🧠",
@@ -16,16 +19,19 @@ st.set_page_config(
 st.title("🧠 Shahajjo Heavy LLM Chat")
 st.caption("Vidclip Organization | Shahajjo Heavy Brain (Safetensors)")
 
-REPO_ID = "Vidclip/Shahajjo"
-REVISION = "shahajjo_heavy_brain"
+# Correct Independent Repository ID
+REPO_ID = "Vidclip/shahajjo_heavy_brain"
 HF_TOKEN = st.secrets["HF_TOKEN"]
 
+# ---------------------------------------------------------
+# Load Model, Config & Tokenizer from the Repo Root
+# ---------------------------------------------------------
 @st.cache_resource
 def load_shahajjo_pipeline():
     try:
-        model_path = hf_hub_download(repo_id=REPO_ID, filename="model.safetensors", revision=REVISION, token=HF_TOKEN)
-        config_path = hf_hub_download(repo_id=REPO_ID, filename="config.json", revision=REVISION, token=HF_TOKEN)
-        tokenizer_path = hf_hub_download(repo_id=REPO_ID, filename="tokenizer.json", revision=REVISION, token=HF_TOKEN)
+        model_path = hf_hub_download(repo_id=REPO_ID, filename="model.safetensors", token=HF_TOKEN)
+        config_path = hf_hub_download(repo_id=REPO_ID, filename="config.json", token=HF_TOKEN)
+        tokenizer_path = hf_hub_download(repo_id=REPO_ID, filename="tokenizer.json", token=HF_TOKEN)
         
         tokenizer = PreTrainedTokenizerFast(tokenizer_file=tokenizer_path)
 
@@ -77,6 +83,9 @@ if error_msg:
     st.json({"status": "error", "response": "Model not loaded properly."})
     st.stop()
 
+# ---------------------------------------------------------
+# Text Generation Logic
+# ---------------------------------------------------------
 def generate_text(prompt, max_length=50):
     inputs = tokenizer(prompt, return_tensors="pt")
     input_ids = inputs["input_ids"].to(device)
@@ -98,6 +107,9 @@ def generate_text(prompt, max_length=50):
                 
     return tokenizer.decode(generated)
 
+# ---------------------------------------------------------
+# Streamlit UI
+# ---------------------------------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
