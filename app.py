@@ -37,18 +37,14 @@ class ShahajjoBrain(nn.Module):
 @st.cache_resource
 def load_all_from_hf():
     try:
-        # 1. Native Tokenizer download & load (tokenizer.json)
         tokenizer_path = hf_hub_download(repo_id=REPO_ID, filename="tokenizer.json", token=HF_TOKEN)
         tokenizer = Tokenizer.from_file(tokenizer_path)
         
-        # 2. Model weights download using safetensors (model.safetensors)
         model_file_path = hf_hub_download(repo_id=REPO_ID, filename="model.safetensors", token=HF_TOKEN)
         
-        # 3. Model initialize kora vocab size diye
         vocab_size = tokenizer.get_vocab_size()
         model = ShahajjoBrain(vocab_size=vocab_size, embed_dim=256, num_layers=4, nhead=4)
         
-        # Safetensors diye state_dict load kora
         state_dict = load_file(model_file_path)
         model.load_state_dict(state_dict)
         model.eval()
@@ -62,81 +58,112 @@ def load_all_from_hf():
 
 tokenizer, model, device, error_msg = load_all_from_hf()
 
-# Render / Web Request dhora (?text=hi)
+# URL Query Parameters ধরা
 query_params = st.query_params
 text_input = query_params.get("text", None)
+output_format = query_params.get("format", None) # format=json চেক করার জন্য
 
-if text_input:
+# ১. যদি 외부 App বা API থেকে রিকোয়েস্ট আসে (text এবং format=json থাকলে)
+if text_input and output_format == "json":
     if model and tokenizer:
         try:
-            # Native tokenizer diye text encode kora
             encoded = tokenizer.encode(text_input)
-            input_ids = encoded.ids
-            if not input_ids:
-                input_ids = [0]
+            input_ids = encoded.ids if encoded.ids else [0]
             
+            prompt_length = len(input_ids)
             input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
-            max_new_tokens = 50  
+            
+            max_new_tokens = 40  
             temperature = 0.7    
-            repetition_penalty = 1.2  # বারবার একই শব্দ বা লুপ আটকাতে পেনাল্টি
-            top_k = 40                # সেরা K টি টোকেন ফিল্টার করতে
+            repetition_penalty = 1.35  
             
             pad_id = tokenizer.token_to_id("<pad>")
             eos_id = tokenizer.token_to_id("</s>")
             
             with torch.no_grad():
                 for _ in range(max_new_tokens):
-                    # সিকোয়েন্স অনেক বড় হয়ে গেলে ক্র্যাশ এড়াতে চেক
-                    if input_tensor.size(1) > 512:
+                    if input_tensor.size(1) > 256:
                         break
                         
                     outputs = model(input_tensor)
                     next_token_logits = outputs[:, -1, :] / temperature
                     
-                    # --- Repetition Penalty লজিক ---
                     for token_id in set(input_tensor[0].tolist()):
                         if next_token_logits[0, token_id] < 0:
                             next_token_logits[0, token_id] *= repetition_penalty
                         else:
                             next_token_logits[0, token_id] /= repetition_penalty
-                            
-                    # --- Top-K Sampling ফিল্টারিং ---
-                    v, idx = torch.topk(next_token_logits, min(top_k, next_token_logits.size(-1)))
+                    
+                    top_k = 30
+                    v, _ = torch.topk(next_token_logits, min(top_k, next_token_logits.size(-1)))
                     next_token_logits[next_token_logits < v[:, [-1]]] = float('-inf')
                     
                     probs = torch.softmax(next_token_logits, dim=-1)
                     next_token_id = torch.multinomial(probs, num_samples=1)
                     
-                    # Pad বা EOS টোকেন পেলে থেমে যাবে
                     token_val = next_token_id.item()
                     if (pad_id is not None and token_val == pad_id) or (eos_id is not None and token_val == eos_id):
                         break
                         
                     input_tensor = torch.cat([input_tensor, next_token_id], dim=1)
             
-            # Output token ids ke decode kore clean kora
-            output_ids = input_tensor[0].tolist()
-            decoded = tokenizer.decode(output_ids).strip()
+            generated_ids = input_tensor[0][prompt_length:].tolist()
+            decoded_reply = tokenizer.decode(generated_ids).strip()
+            
+            if not decoded_reply:
+                decoded_reply = tokenizer.decode(input_tensor[0].tolist()).strip()
             
             result = {
                 "status": "success",
-                "response": decoded,
-                "reply": decoded,
-                "message": decoded,
-                "text": decoded
+                "response": decoded_reply
             }
         except Exception as e:
             result = {"status": "error", "response": f"Generation error: {str(e)}"}
     else:
         result = {"status": "error", "response": f"Failed to load: {error_msg}"}
     
-    # Render-er BeautifulSoup / API Gateway-er jonno JSON output
+    # সংক্ষেপে শুধু JSON প্রিন্ট করে পড়া সহজ করা
     st.code(json.dumps(result), language="json")
     st.stop()
 
-# Streamlit normal web page UI
+# ==========================================
+# ২. সাধারণ ইউজারের জন্য Streamlit UI
+# ==========================================
 st.title("🇧🇩 Shahajjo LLM Backend")
+
 if model and tokenizer:
-    st.success("ShahajjoBrain & Native BPE Tokenizer loaded successfully via safetensors!")
+    st.success("ShahajjoBrain Model Ready!")
+    
+    # ইন্টারঅ্যাক্টিভ চ্যাট বাক্সে টেস্ট করার অপশন
+    user_prompt = st.text_input("মেসেজ লিখুন:", value=text_input if text_input else "")
+    if st.button("Generate") and user_prompt:
+        with st.spinner("চিন্তা করছে..."):
+            encoded = tokenizer.encode(user_prompt)
+            input_ids = encoded.ids if encoded.ids else [0]
+            prompt_length = len(input_ids)
+            input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
+            
+            with torch.no_grad():
+                for _ in range(40):
+                    if input_tensor.size(1) > 256:
+                        break
+                    outputs = model(input_tensor)
+                    next_token_logits = outputs[:, -1, :] / 0.7
+                    
+                    top_k = 30
+                    v, _ = torch.topk(next_token_logits, min(top_k, next_token_logits.size(-1)))
+                    next_token_logits[next_token_logits < v[:, [-1]]] = float('-inf')
+                    
+                    probs = torch.softmax(next_token_logits, dim=-1)
+                    next_token_id = torch.multinomial(probs, num_samples=1)
+                    
+                    token_val = next_token_id.item()
+                    if token_val == tokenizer.token_to_id("</s>"):
+                        break
+                    input_tensor = torch.cat([input_tensor, next_token_id], dim=1)
+            
+            generated_ids = input_tensor[0][prompt_length:].tolist()
+            reply = tokenizer.decode(generated_ids).strip()
+            st.write("**উত্তর:**", reply)
 else:
-    st.error(f"Error loading model from Hugging Face: {error_msg}")
+    st.error(f"Error loading model: {error_msg}")
