@@ -23,10 +23,10 @@ REPO_ID = "Vidclip/Shahajjo"
 HF_TOKEN = st.secrets["HF_TOKEN"]
 
 # ---------------------------------------------------------
-# Correct LSTM Architecture (Matching Saved Checkpoint)
+# Exact Checkpoint Architecture Match (Hidden Size 512, Vocab 100k)
 # ---------------------------------------------------------
 class ShahajjoBrainConfig:
-    def __init__(self, vocab_size=100000, hidden_size=256, num_layers=2):
+    def __init__(self, vocab_size=100000, hidden_size=512, num_layers=2):
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
