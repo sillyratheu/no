@@ -86,43 +86,45 @@ def load_dicode_pipeline():
             
         tokenizer = SafeCustomTokenizer(vocab_dict)
 
-        class SafeCustomTokenizer:
-    def __init__(self, vocab_dict):
-        self.vocab = vocab_dict
-        self.id_to_token = {}
+        # Exact Transformer Architecture matching config.json
+        class ShahajjoBrainModel(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.embedding = nn.Embedding(vocab_size, hidden_size)
+                encoder_layer = nn.TransformerEncoderLayer(
+                    d_model=hidden_size,
+                    nhead=num_attention_heads,
+                    dim_feedforward=intermediate_size,
+                    batch_first=True,
+                    dropout=0.1
+                )
+                self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_hidden_layers)
+                self.fc = nn.Linear(hidden_size, vocab_size)
+
+            def forward(self, input_ids):
+                x = self.embedding(input_ids)
+                out = self.transformer_encoder(x)
+                logits = self.fc(out)
+                return logits
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = ShahajjoBrainModel()
         
-        for k, v in vocab_dict.items():
-            idx = v
-            if isinstance(v, list):
-                idx = v[0] if v else 0
-            elif isinstance(v, dict):
-                idx = v.get("id", v.get("index", 0))
-            if isinstance(idx, int):
-                self.id_to_token[idx] = k
-                
-        self.unk_id = 1
-        self.pad_id = 0
+        state_dict = torch.load(model_path, map_location=device)
+        model.load_state_dict(state_dict)
+        model.to(device)
+        model.eval()
+        
+        return model, tokenizer, device, None
+    except Exception as e:
+        return None, None, None, str(e)
 
-    def encode(self, text):
-        tokens = text.split()
-        ids = []
-        for token in tokens:
-            val = self.vocab.get(token, self.vocab.get("<unk>", 1))
-            if isinstance(val, list): val = val[0] if val else 1
-            elif isinstance(val, dict): val = val.get("id", 1)
-            if isinstance(val, int):
-                ids.append(val)
-        return ids if ids else [1]
+model, tokenizer, device, error_msg = load_dicode_pipeline()
 
-    def decode(self, ids):
-        tokens = []
-        for idx in ids:
-            if idx == self.pad_id:
-                continue
-            # Jodi token na paoa jay, tahole r blank na rekhe safety token dibe
-            token = self.id_to_token.get(idx, f"token_{idx}")
-            tokens.append(token)
-        return " ".join(tokens)
+if error_msg:
+    st.error(f"❌ Model failed to load: {error_msg}")
+    st.json({"status": "error", "response": "Model not loaded properly."})
+    st.stop()
 
 # ---------------------------------------------------------
 # Generation Logic with Loop Protection
