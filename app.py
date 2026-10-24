@@ -21,7 +21,7 @@ REPO_ID = "Vidclip/Shahajjo_Dicode"
 HF_TOKEN = st.secrets["HF_TOKEN"]
 
 # ---------------------------------------------------------
-# Safe Tokenizer (Handles Lists, Dicts, and Integers)
+# Safe Tokenizer (Handles Lists, Dicts, and Integers & Safe Fallback)
 # ---------------------------------------------------------
 class SafeCustomTokenizer:
     def __init__(self, vocab_dict):
@@ -56,9 +56,9 @@ class SafeCustomTokenizer:
         for idx in ids:
             if idx == self.pad_id:
                 continue
-            token = self.id_to_token.get(idx, "")
-            if token and token not in ["<pad>", "<unk>", "</s>", "<|endoftext|>"]:
-                tokens.append(token)
+            # Fallback to token index if word is missing, preventing blank screen
+            token = self.id_to_token.get(idx, f"token_{idx}")
+            tokens.append(token)
         return " ".join(tokens)
 
 # ---------------------------------------------------------
@@ -127,7 +127,7 @@ if error_msg:
     st.stop()
 
 # ---------------------------------------------------------
-# Generation Logic with Loop Protection
+# Generation Logic with Loop Protection & Prompt Separation
 # ---------------------------------------------------------
 def generate_text(prompt, max_length=50):
     input_ids = tokenizer.encode(prompt)
@@ -143,8 +143,10 @@ def generate_text(prompt, max_length=50):
                 break
                 
             generated.append(next_token)
-                
-    return tokenizer.decode(generated)
+            
+    # Decode only the newly generated tokens
+    new_tokens = generated[len(input_ids):]
+    return tokenizer.decode(new_tokens) if new_tokens else tokenizer.decode(generated)
 
 # ---------------------------------------------------------
 # Streamlit Chat UI
