@@ -23,39 +23,35 @@ REPO_ID = "Vidclip/Shahajjo"
 HF_TOKEN = st.secrets["HF_TOKEN"]
 
 # ---------------------------------------------------------
-# Architecture Definition
+# Correct LSTM Architecture (Matching Saved Checkpoint)
 # ---------------------------------------------------------
 class ShahajjoBrainConfig:
-    def __init__(self, vocab_size=40000, hidden_size=512, num_hidden_layers=6, num_attention_heads=8, intermediate_size=2048):
+    def __init__(self, vocab_size=100000, hidden_size=256, num_layers=2):
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
-        self.num_hidden_layers = num_hidden_layers
-        self.num_attention_heads = num_attention_heads
-        self.intermediate_size = intermediate_size
+        self.num_layers = num_layers
 
 class ShahajjoBrainModel(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
         self.embedding = nn.Embedding(config.vocab_size, config.hidden_size)
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=config.hidden_size,
-            nhead=config.num_attention_heads,
-            dim_feedforward=config.intermediate_size,
-            batch_first=True,
-            dropout=0.1
+        self.lstm = nn.LSTM(
+            input_size=config.hidden_size,
+            hidden_size=config.hidden_size,
+            num_layers=config.num_layers,
+            batch_first=True
         )
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=config.num_hidden_layers)
         self.fc = nn.Linear(config.hidden_size, config.vocab_size)
 
     def forward(self, input_ids):
         x = self.embedding(input_ids)
-        out = self.transformer_encoder(x)
+        out, _ = self.lstm(x)
         logits = self.fc(out)
         return logits
 
 # ---------------------------------------------------------
-# Robust Custom Tokenizer (Vocab Fallback)
+# Custom Tokenizer Fallback
 # ---------------------------------------------------------
 class CustomVocabTokenizer:
     def __init__(self, vocab_dict):
@@ -79,11 +75,9 @@ class CustomVocabTokenizer:
 @st.cache_resource
 def load_shahajjo_pipeline():
     try:
-        # 1. Download Model & Config Files
         model_path = hf_hub_download(repo_id=REPO_ID, filename="model.pth", token=HF_TOKEN)
         vocab_path = hf_hub_download(repo_id=REPO_ID, filename="vocab.json", token=HF_TOKEN)
         
-        # 2. Load Tokenizer safely
         try:
             tok_path = hf_hub_download(repo_id=REPO_ID, filename="tokenizer.json", token=HF_TOKEN)
             raw_tokenizer = Tokenizer.from_file(tok_path)
@@ -102,7 +96,6 @@ def load_shahajjo_pipeline():
                 vocab_dict = json.load(f)
             tokenizer = CustomVocabTokenizer(vocab_dict)
 
-        # 3. Load Model Architecture & Weights
         config = ShahajjoBrainConfig()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = ShahajjoBrainModel(config)
@@ -118,7 +111,6 @@ def load_shahajjo_pipeline():
 
 model, tokenizer, device, error_msg = load_shahajjo_pipeline()
 
-# Error handling in UI
 if error_msg:
     st.error(f"❌ Model failed to load: {error_msg}")
     st.json({"status": "error", "response": "Model not loaded properly."})
@@ -142,7 +134,6 @@ def generate_text(prompt, max_length=50):
             next_token = torch.argmax(next_token_logits, dim=-1).item()
             generated.append(next_token)
             
-            # EOS Check
             decoded_word = tokenizer.decode([next_token])
             if decoded_word in ["</s>", "<|endoftext|>"]:
                 break
