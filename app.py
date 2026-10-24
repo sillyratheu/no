@@ -23,35 +23,39 @@ REPO_ID = "Vidclip/Shahajjo"
 HF_TOKEN = st.secrets["HF_TOKEN"]
 
 # ---------------------------------------------------------
-# Exact Checkpoint Architecture Match (Hidden Size 512, Vocab 100k)
+# Exact Transformer Architecture from Your Training Script
 # ---------------------------------------------------------
 class ShahajjoBrainConfig:
-    def __init__(self, vocab_size=100000, hidden_size=512, num_layers=2):
+    def __init__(self, vocab_size=40000, hidden_size=512, num_hidden_layers=6, num_attention_heads=8, intermediate_size=2048):
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
-        self.num_layers = num_layers
+        self.num_hidden_layers = num_hidden_layers
+        self.num_attention_heads = num_attention_heads
+        self.intermediate_size = intermediate_size
 
 class ShahajjoBrainModel(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
         self.embedding = nn.Embedding(config.vocab_size, config.hidden_size)
-        self.lstm = nn.LSTM(
-            input_size=config.hidden_size,
-            hidden_size=config.hidden_size,
-            num_layers=config.num_layers,
-            batch_first=True
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=config.hidden_size,
+            nhead=config.num_attention_heads,
+            dim_feedforward=config.intermediate_size,
+            batch_first=True,
+            dropout=0.1
         )
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=config.num_hidden_layers)
         self.fc = nn.Linear(config.hidden_size, config.vocab_size)
 
     def forward(self, input_ids):
         x = self.embedding(input_ids)
-        out, _ = self.lstm(x)
+        out = self.transformer_encoder(x)
         logits = self.fc(out)
         return logits
 
 # ---------------------------------------------------------
-# Custom Tokenizer Fallback
+# Custom Vocab Tokenizer Fallback
 # ---------------------------------------------------------
 class CustomVocabTokenizer:
     def __init__(self, vocab_dict):
@@ -117,7 +121,7 @@ if error_msg:
     st.stop()
 
 # ---------------------------------------------------------
-# Text Generation
+# Text Generation Logic
 # ---------------------------------------------------------
 def generate_text(prompt, max_length=50):
     input_ids = tokenizer.encode(prompt)
@@ -128,7 +132,7 @@ def generate_text(prompt, max_length=50):
     
     with torch.no_grad():
         for _ in range(max_length):
-            curr_input = torch.tensor([generated[-128:]], device=device, dtype=torch.long)
+            curr_input = torch.tensor([generated[-256:]], device=device, dtype=torch.long)
             logits = model(curr_input)
             next_token_logits = logits[0, -1, :]
             next_token = torch.argmax(next_token_logits, dim=-1).item()
@@ -141,7 +145,7 @@ def generate_text(prompt, max_length=50):
     return tokenizer.decode(generated)
 
 # ---------------------------------------------------------
-# Streamlit Interface
+# Streamlit Chat UI
 # ---------------------------------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
