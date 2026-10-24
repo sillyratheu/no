@@ -6,27 +6,16 @@ import streamlit as st
 from huggingface_hub import hf_hub_download
 from tokenizers import Tokenizer
 
-# ---------------------------------------------------------
-# Page Configuration
-# ---------------------------------------------------------
-st.set_page_config(
-    page_title="Shahajjo LLM Ecosystem",
-    page_icon="🧠",
-    layout="centered"
-)
-
+st.set_page_config(page_title="Shahajjo LLM Ecosystem", page_icon="🧠", layout="centered")
 st.title("🧠 Shahajjo LLM Chat")
 st.caption("Vidclip Organization | Local Resource Friendly Model")
 
-# Repository Details & Token from Streamlit Secrets
 REPO_ID = "Vidclip/Shahajjo"
 HF_TOKEN = st.secrets["HF_TOKEN"]
 
-# ---------------------------------------------------------
-# Exact Checkpoint Matching Architecture (LSTM: Vocab 40k, Embed 256, Hidden 512, Layers 2)
-# ---------------------------------------------------------
+# Exact Checkpoint Matching LSTM Architecture
 class ShahajjoBrainConfig:
-    def __init__(self, vocab_size=40000, embedding_dim=256, hidden_size=512, num_layers=2):
+    def __init__(self, vocab_size=100000, embedding_dim=256, hidden_size=512, num_layers=2):
         self.vocab_size = vocab_size
         self.embedding_dim = embedding_dim
         self.hidden_size = hidden_size
@@ -51,9 +40,6 @@ class ShahajjoBrainModel(nn.Module):
         logits = self.fc(out)
         return logits
 
-# ---------------------------------------------------------
-# Custom Vocab Tokenizer Fallback
-# ---------------------------------------------------------
 class CustomVocabTokenizer:
     def __init__(self, vocab_dict):
         self.vocab = vocab_dict
@@ -63,16 +49,12 @@ class CustomVocabTokenizer:
 
     def encode(self, text):
         tokens = text.split()
-        ids = [self.vocab.get(token, self.unk_id) for token in tokens]
-        return ids
+        return [self.vocab.get(token, self.unk_id) for token in tokens]
 
     def decode(self, ids):
         tokens = [self.id_to_token.get(idx, "<unk>") for idx in ids if idx != self.pad_id]
         return " ".join(tokens)
 
-# ---------------------------------------------------------
-# Load Model & Tokenizer (Cached)
-# ---------------------------------------------------------
 @st.cache_resource
 def load_shahajjo_pipeline():
     try:
@@ -82,15 +64,10 @@ def load_shahajjo_pipeline():
         try:
             tok_path = hf_hub_download(repo_id=REPO_ID, filename="tokenizer.json", token=HF_TOKEN)
             raw_tokenizer = Tokenizer.from_file(tok_path)
-            
             class FastTokenizerWrapper:
-                def __init__(self, tok):
-                    self.tok = tok
-                def encode(self, text):
-                    return self.tok.encode(text).ids
-                def decode(self, ids):
-                    return self.tok.decode(ids)
-                    
+                def __init__(self, tok): self.tok = tok
+                def encode(self, text): return self.tok.encode(text).ids
+                def decode(self, ids): return self.tok.decode(ids)
             tokenizer = FastTokenizerWrapper(raw_tokenizer)
         except Exception:
             with open(vocab_path, "r", encoding="utf-8") as f:
@@ -117,33 +94,21 @@ if error_msg:
     st.json({"status": "error", "response": "Model not loaded properly."})
     st.stop()
 
-# ---------------------------------------------------------
-# Text Generation Logic
-# ---------------------------------------------------------
 def generate_text(prompt, max_length=50):
     input_ids = tokenizer.encode(prompt)
-    if not input_ids:
-        input_ids = [0]
-        
+    if not input_ids: input_ids = [0]
     generated = list(input_ids)
     
     with torch.no_grad():
         for _ in range(max_length):
             curr_input = torch.tensor([generated[-128:]], device=device, dtype=torch.long)
             logits = model(curr_input)
-            next_token_logits = logits[0, -1, :]
-            next_token = torch.argmax(next_token_logits, dim=-1).item()
+            next_token = torch.argmax(logits[0, -1, :], dim=-1).item()
             generated.append(next_token)
-            
-            decoded_word = tokenizer.decode([next_token])
-            if decoded_word in ["</s>", "<|endoftext|>"]:
+            if tokenizer.decode([next_token]) in ["</s>", "<|endoftext|>"]:
                 break
-                
     return tokenizer.decode(generated)
 
-# ---------------------------------------------------------
-# Streamlit Chat UI
-# ---------------------------------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -153,12 +118,10 @@ for message in st.session_state.messages:
 
 if prompt := st.chat_input("Shahajjo LLM-er sathe kotha bolun..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    with st.chat_message("user"): st.markdown(prompt)
 
     with st.chat_message("assistant"):
         with st.spinner("Shahajjo chinta korche..."):
             response = generate_text(prompt)
             st.markdown(response)
-            
     st.session_state.messages.append({"role": "assistant", "content": response})
