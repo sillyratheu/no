@@ -23,34 +23,31 @@ REPO_ID = "Vidclip/Shahajjo"
 HF_TOKEN = st.secrets["HF_TOKEN"]
 
 # ---------------------------------------------------------
-# Exact Transformer Architecture from Your Training Script
+# Exact Checkpoint Matching Architecture (LSTM: Vocab 100k, Embed 256, Hidden 512, Layers 2)
 # ---------------------------------------------------------
 class ShahajjoBrainConfig:
-    def __init__(self, vocab_size=40000, hidden_size=512, num_hidden_layers=6, num_attention_heads=8, intermediate_size=2048):
+    def __init__(self, vocab_size=100000, embedding_dim=256, hidden_size=512, num_layers=2):
         self.vocab_size = vocab_size
+        self.embedding_dim = embedding_dim
         self.hidden_size = hidden_size
-        self.num_hidden_layers = num_hidden_layers
-        self.num_attention_heads = num_attention_heads
-        self.intermediate_size = intermediate_size
+        self.num_layers = num_layers
 
 class ShahajjoBrainModel(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        self.embedding = nn.Embedding(config.vocab_size, config.hidden_size)
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=config.hidden_size,
-            nhead=config.num_attention_heads,
-            dim_feedforward=config.intermediate_size,
-            batch_first=True,
-            dropout=0.1
+        self.embedding = nn.Embedding(config.vocab_size, config.embedding_dim)
+        self.lstm = nn.LSTM(
+            input_size=config.embedding_dim,
+            hidden_size=config.hidden_size,
+            num_layers=config.num_layers,
+            batch_first=True
         )
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=config.num_hidden_layers)
         self.fc = nn.Linear(config.hidden_size, config.vocab_size)
 
     def forward(self, input_ids):
         x = self.embedding(input_ids)
-        out = self.transformer_encoder(x)
+        out, _ = self.lstm(x)
         logits = self.fc(out)
         return logits
 
@@ -132,7 +129,7 @@ def generate_text(prompt, max_length=50):
     
     with torch.no_grad():
         for _ in range(max_length):
-            curr_input = torch.tensor([generated[-256:]], device=device, dtype=torch.long)
+            curr_input = torch.tensor([generated[-128:]], device=device, dtype=torch.long)
             logits = model(curr_input)
             next_token_logits = logits[0, -1, :]
             next_token = torch.argmax(next_token_logits, dim=-1).item()
