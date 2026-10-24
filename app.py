@@ -76,21 +76,38 @@ if text_input:
                 input_ids = [0]
             
             input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
-            max_new_tokens = 30  
+            max_new_tokens = 50  
             temperature = 0.7    
+            repetition_penalty = 1.2  # বারবার একই শব্দ বা লুপ আটকাতে পেনাল্টি
+            top_k = 40                # সেরা K টি টোকেন ফিল্টার করতে
             
             pad_id = tokenizer.token_to_id("<pad>")
             eos_id = tokenizer.token_to_id("</s>")
             
             with torch.no_grad():
                 for _ in range(max_new_tokens):
+                    # সিকোয়েন্স অনেক বড় হয়ে গেলে ক্র্যাশ এড়াতে চেক
+                    if input_tensor.size(1) > 512:
+                        break
+                        
                     outputs = model(input_tensor)
                     next_token_logits = outputs[:, -1, :] / temperature
+                    
+                    # --- Repetition Penalty লজিক ---
+                    for token_id in set(input_tensor[0].tolist()):
+                        if next_token_logits[0, token_id] < 0:
+                            next_token_logits[0, token_id] *= repetition_penalty
+                        else:
+                            next_token_logits[0, token_id] /= repetition_penalty
+                            
+                    # --- Top-K Sampling ফিল্টারিং ---
+                    v, idx = torch.topk(next_token_logits, min(top_k, next_token_logits.size(-1)))
+                    next_token_logits[next_token_logits < v[:, [-1]]] = float('-inf')
                     
                     probs = torch.softmax(next_token_logits, dim=-1)
                     next_token_id = torch.multinomial(probs, num_samples=1)
                     
-                    # Jodi pad ba eos token ase, tahole loop theme jabe
+                    # Pad বা EOS টোকেন পেলে থেমে যাবে
                     token_val = next_token_id.item()
                     if (pad_id is not None and token_val == pad_id) or (eos_id is not None and token_val == eos_id):
                         break
