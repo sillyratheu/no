@@ -17,7 +17,7 @@ st.set_page_config(
 st.title("💻 Shahajjo Dicode Chat")
 st.caption("Vidclip Organization | Coding Assistant Model (Transformer)")
 
-REPO_ID = "Vidclip/Shahajjo_Dicode"
+REPO_ID = "Vidclip/Shahajjo"
 HF_TOKEN = st.secrets["HF_TOKEN"]
 
 # ---------------------------------------------------------
@@ -158,13 +158,13 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Code likhte ki sahajjo lagbe? (Shahajjo Dicode)..."):
+if prompt := st.chat_input("What type of help do you need? (Shahajjo)..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Shahajjo Dicode code likhche..."):
+        with st.spinner("Shahajjo is thinking about your need..."):
             response = generate_text(prompt)
             st.markdown(response)
             
