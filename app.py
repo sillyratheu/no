@@ -5,8 +5,8 @@ from tokenizers import Tokenizer
 from huggingface_hub import hf_hub_download
 
 st.set_page_config(page_title="Shahajjo LLM", page_icon="🇧🇩")
-st.title("🇧🇩 Shahajjo - Bengali Transformer LLM")
-st.write("A self-trained lightweight generative LLM running on Hugging Face & Streamlit.")
+st.title("🇧🇩 Shahajjo - Heavy Bengali Transformer LLM")
+st.write("A self-trained heavy generative LLM (Hidden Size: 512, Vocab: 8000) running on Hugging Face & Streamlit.")
 
 # Load Tokenizer & Model from HF Repo
 @st.cache_resource
@@ -19,15 +19,15 @@ def load_model_and_tokenizer():
     
     tokenizer = Tokenizer.from_file("tokenizer.json")
     
-    # Architecture config
-    VOCAB_SIZE = 4000
-    HIDDEN_SIZE = 256
+    # Updated Heavy Architecture config
+    VOCAB_SIZE = 8000
+    HIDDEN_SIZE = 512
     NUM_LAYERS = 6
     NUM_HEADS = 8
-    INTERMEDIATE_SIZE = 1024
+    INTERMEDIATE_SIZE = 2048
     MAX_POS = 128
     
-    class ShahajjoTransformerModel(nn.Module):
+    class ShahajjoHeavyTransformer(nn.Module):
         def __init__(self):
             super().__init__()
             self.embedding = nn.Embedding(VOCAB_SIZE, HIDDEN_SIZE)
@@ -51,13 +51,13 @@ def load_model_and_tokenizer():
             return self.fc_out(x)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = ShahajjoTransformerModel().to(device)
+    model = ShahajjoHeavyTransformer().to(device)
     model.load_state_dict(torch.load("model.pth", map_location=device))
     model.eval()
     
     return model, tokenizer, device, VOCAB_SIZE, MAX_POS
 
-with st.spinner("Model & Tokenizer load hocche... ⏳"):
+with st.spinner("Heavy Model & Pro Tokenizer load hocche... ⏳"):
     model, tokenizer, device, VOCAB_SIZE, MAX_POS = load_model_and_tokenizer()
 
 # Chat UI
@@ -70,8 +70,9 @@ if st.button("Generate Response 🚀"):
         input_tensor = torch.tensor([input_ids], dtype=torch.long, device=device)
         
         generated_ids = input_ids.copy()
-        temperature = 0.7
-        repetition_penalty = 1.3  # টোকেন রিপিটেশন বা লুপ রোধ করার জন্য
+        temperature = 0.4
+        repetition_penalty = 1.6  # রিপিটেশন এবং লুপ এড়ানোর জন্য স্ট্রং পেনাল্টি
+        top_k = 50                # গিব্রিশ বা আবলতাবল টোকেন ফিল্টার করার জন্য
         
         with torch.no_grad():
             for _ in range(35):
@@ -85,6 +86,12 @@ if st.button("Generate Response 🚀"):
                         next_token_logits[token_id] *= repetition_penalty
                     else:
                         next_token_logits[token_id] /= repetition_penalty
+                
+                # Apply Top-K Filtering
+                if top_k > 0:
+                    values, indices = torch.topk(next_token_logits, top_k)
+                    min_allowed = values[-1]
+                    next_token_logits[next_token_logits < min_allowed] = -float('Inf')
                 
                 probs = torch.softmax(next_token_logits, dim=-1)
                 next_token = torch.multinomial(probs, num_samples=1).item()
